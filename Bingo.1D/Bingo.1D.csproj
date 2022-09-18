@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <RootNamespace>Bingo.One</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyName>Bingo.One</AssemblyName>
+        <PackageId>Bingo.1D</PackageId>
+        <Authors>Pygmalions</Authors>
+        <Title>Bingo 1D</Title>
+        <PackageVersion>0.9.0</PackageVersion>
+        <Description>A symbol pattern describing and matching engine.</Description>
+        <Copyright>MIT License.</Copyright>
+        <PackageProjectUrl>https://github.com/Pygmalions/Bingo</PackageProjectUrl>
+        <PackageLicenseUrl>https://github.com/Pygmalions/Bingo/blob/main/LICENSE</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/Pygmalions/Bingo</RepositoryUrl>
+        <RepositoryType>Git</RepositoryType>
+        <PackageTags>Pattern Bingo</PackageTags>
+        <PackageReleaseNotes>This library is still under rapid development and its API may be unstable.</PackageReleaseNotes>
+    </PropertyGroup>
+
+</Project>
