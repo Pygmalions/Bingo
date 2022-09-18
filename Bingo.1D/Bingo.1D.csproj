@@ -13,7 +13,7 @@
         <Description>A symbol pattern describing and matching engine.</Description>
         <Copyright>MIT License.</Copyright>
         <PackageProjectUrl>https://github.com/Pygmalions/Bingo</PackageProjectUrl>
-        <PackageLicenseUrl>https://github.com/Pygmalions/Bingo/blob/main/LICENSE</PackageLicenseUrl>
+        <PackageLicenseUrl></PackageLicenseUrl>
         <RepositoryUrl>https://github.com/Pygmalions/Bingo</RepositoryUrl>
         <RepositoryType>Git</RepositoryType>
         <PackageTags>Pattern Bingo</PackageTags>
