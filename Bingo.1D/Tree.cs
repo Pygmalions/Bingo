@@ -4,38 +4,105 @@ namespace Bingo.One;
 
 public class Tree<TElement>
 {
-    public readonly Pattern<TElement> Root = new Sequence<TElement>();
+    private readonly Node<TElement> _root = new(new FunctorPattern<TElement>(_ => true));
 
-    public List<object> Parse(Source<TElement> source)
+    public Func<TElement[], object>? Fallback
     {
-        var session = new Session<TElement>(Root, source);
-
-        while (!source.Empty)
-        {
-            session.Move();
-        }
-        
-        return session.Productions;
+        get => _root.Generator;
+        set => _root.Generator = value;
     }
 
-    public void Merge(IEnumerable<Pattern<TElement>> patterns)
+    public void Merge(IEnumerable<Pattern<TElement>> patterns, Func<TElement[], object> generator)
     {
-        var position = Root;
+        var position = _root;
         foreach (var pattern in patterns)
         {
             var found = false;
-            foreach (var continuation in position.Continuations)
+            foreach (var branch in position.Next)
             {
-                if (!continuation.Equivalent(pattern))
+                if (!branch.Pattern.Equivalent(pattern))
                     continue;
-                position = continuation;
                 found = true;
+                position = branch;
                 break;
             }
+
             if (found)
                 continue;
-            position.Continuations.Add(pattern);
-            position = pattern;
+            var next = new Node<TElement>(pattern);
+            position.Next.Add(next);
+            position = next;
         }
+
+        position.Generator = generator;
+    }
+    
+    public List<object> Parse(Source<TElement> source)
+    {
+        var productions = new List<object>();
+
+        var position = _root;
+        var generator = _root.Generator;
+        var nodes = new Stack<Node<TElement>>();
+        var context = new Context<TElement>(source);
+
+        void Generate()
+        {
+            var sequence = context.Commit();
+            if (generator != null)
+                productions!.Add(generator(sequence));
+        }
+
+        void GoToRoot()
+        {
+            nodes.Clear();
+            position = _root;
+            generator = _root.Generator;
+        }
+        
+        while (!context.Empty)
+        {
+            if (position.Pattern.Match(context))
+            {
+                generator = position.Generator;
+                // Meet the end of this pattern branch.
+                if (position.Next.Count == 0)
+                {
+                    Generate();
+                    GoToRoot();
+                    continue;
+                }
+                for (var index = position.Next.Count - 1; index > 0; index--)
+                {
+                    // Add enough checkpoints for alternative branches.
+                    context.AddCheckpoint();
+                    nodes.Push(position.Next[index]);
+                }
+                nodes.Push(position.Next[0]);
+            }
+            else
+                // Rollback to the previous checkpoint.
+                context.Rollback();
+
+            // Check whether this iteration reaches the end of all possible branches.
+            if (nodes.TryPop(out var next))
+            {
+                position = next;
+                continue;
+            }
+            
+            // This current element is not consumed by any pattern.
+            if (context.ConsumedCount == 0)
+                context.Consume();
+            Generate();
+
+            // Go back to the root.
+            GoToRoot();
+        }
+        // Handle the remained tail sequence.
+        if (context.ConsumedCount > 0)
+            Generate();
+
+        return productions;
     }
 }

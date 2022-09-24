@@ -11,16 +11,17 @@ public class LetterPattern : Pattern<char>
     
     public override bool Match(Context<char> context)
     {
-        if (context.Current != Letter)
+        if (context.Current != Letter) 
             return false;
         context.Consume();
         return true;
+
     }
 
     public override bool Equivalent(Pattern<char> target)
     {
         if (target is LetterPattern pattern)
-            return pattern.Letter == Letter;
+            return Letter == pattern.Letter;
         return false;
     }
 }

@@ -2,82 +2,75 @@
 
 public abstract class Source<TElement>
 {
-    public TElement? Current { get; set; }
+    /// <summary>
+    /// Whether the current element is valid or not.
+    /// </summary>
+    public bool Valid { get; protected set; }
 
     /// <summary>
-    /// Whether the source is empty or not.
+    /// Current element. It is nullable only when TElement is a reference type.
     /// </summary>
-    public bool Empty { get; protected set; }
+    private TElement? _current;
 
     /// <summary>
-    /// Buffered elements, which mainly came from the transaction rollback.
-    /// </summary>
-    private readonly Stack<TElement> _bufferedElements = new();
-    /// <summary>
-    /// Consumed elements of the current transaction.
+    /// Consumed elements.
     /// </summary>
     private readonly Stack<TElement> _consumedElements = new();
 
-    /// <summary>
-    /// Count of consumed elements in this transaction.
-    /// </summary>
     public int ConsumedCount => _consumedElements.Count;
-
+    
     /// <summary>
-    /// Count of buffered elements in this transaction.
+    /// Buffered elements.
     /// </summary>
+    private readonly Stack<TElement> _bufferedElements = new();
+
     public int BufferedCount => _bufferedElements.Count;
     
     /// <summary>
-    /// Implement this method to provide elements.
+    /// The current element to process.
     /// </summary>
-    /// <returns></returns>
-    protected abstract bool Acquire(out TElement? element);
+    public TElement Current
+    {
+        get
+        {
+            if (_current != null && Valid)
+                return _current;
+            throw new InvalidOperationException("Current element is invalid.");
+        }
+    }
 
-    private bool _initialized = false;
+    protected abstract bool Acquire(ref TElement? element);
 
     /// <summary>
-    /// Store the current element if it is not null and this source has been initialized,
-    /// then acquire a new element from the source.
+    /// Commit and pick out the current element sequence.
     /// </summary>
-    public bool Consume()
+    /// <returns>Consumed elements sequence.</returns>
+    public TElement[] Commit()
     {
-        // Store the current element into the transaction if this source has initialized.
-        if (_initialized && Current is not null)
+        var length = _consumedElements.Count;
+        var sequence = new TElement[length];
+        for (var index = 1; index <= length; index++)
         {
-            _consumedElements.Push(Current);
-        }
-        _initialized = true;
-
-        // Try to acquire an element from the buffer.
-        if (_bufferedElements.TryPop(out var element))
-        {
-            Current = element;
-            return true;
+            sequence[length - index] = _consumedElements.Pop();
         }
 
-        // Acquire an element from the Acquire(...) method.
-        if (Acquire(out element))
-        {
-            Current = element;
-            return true;
-        }
-        // The empty flag will be set to true every time the Acquire(...) method returns a false.
-        Empty = true;
-        return false;
+        return sequence;
     }
 
     /// <summary>
-    /// Return the elements of the current transaction into the buffer queue,
-    /// which can be consumed again. 
+    /// Rollback the current element sequence.
     /// </summary>
-    /// <returns>Count of effected consumed elements.</returns>
-    public int Rollback(int count = 1)
+    /// <param name="count">
+    /// Count of consumed elements to rollback.
+    /// If it is negative, then all consumed elements will be rolled back.
+    /// </param>
+    /// <returns>Count of effected elements.</returns>
+    public int Rollback(int count = -1)
     {
-        if (_initialized || _consumedElements.Count == 0)
+        if (count == 0)
             return 0;
-        if (Current != null)
-            _bufferedElements.Push(Current);
+        if (count < 0)
+            count = _consumedElements.Count;
         for (var index = 0; index < count; index++)
         {
             if (!_consumedElements.TryPop(out var element))
@@ -87,22 +80,36 @@ public abstract class Source<TElement>
             }
             _bufferedElements.Push(element);
         }
-        Current = _bufferedElements.Pop();
 
+        // Update the current element while not push the former one into the stack.
+        Valid = false;
+        Consume();
         return count;
     }
-    
+
     /// <summary>
-    /// Return the elements queue of the current transaction,
-    /// and then start a new transaction.
+    /// Consume the current element and get the next element.
     /// </summary>
-    /// <returns>Queue of committed elements.</returns>
-    public TElement[] Commit()
+    public bool Consume()
     {
-        var length = _consumedElements.Count;
-        var sequence = new TElement[length];
-        for (var index = 1; _consumedElements.TryPop(out var element); index++)
-            sequence[length - index] = element;
-        return sequence;
+        if (Valid && _current != null)
+            _consumedElements.Push(_current);
+        var valid = false;
+        
+        if (_bufferedElements.TryPop(out var element))
+        {
+            _current = element;
+            valid = true;
+        } else if (Acquire(ref _current))
+        {
+            valid = true;
+        }
+        else
+        {
+            _current = default;
+        }
+
+        Valid = valid;
+        return valid;
     }
 }

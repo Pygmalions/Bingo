@@ -2,82 +2,86 @@
 
 public class Context<TElement>
 {
+    private readonly Source<TElement> _source;
+
     public Context(Source<TElement> source)
     {
         _source = source;
-    }
-
-    /// <summary>
-    /// Bound element source.
-    /// </summary>
-    private readonly Source<TElement> _source;
-    
-    /// <summary>
-    /// Current element.
-    /// </summary>
-    public TElement? Current => _source.Current;
-
-    /// <summary>
-    /// Count of elements consumed by current pattern.
-    /// </summary>
-    public int Consumption => _source.ConsumedCount;
-    
-    /// <summary>
-    /// History of counts of consumed elements.
-    /// </summary>
-    private readonly Stack<int> _milestones = new();
-
-    /// <summary>
-    /// Mark a milestone for this context to rollback.
-    /// </summary>
-    internal void Mark()
-    {
-        if (Consumption > 0)
-        {
-            _milestones.Push(Consumption);
-        }
-    }
-    
-    /// <summary>
-    /// Add the current element to the sequence and acquire a new one from the source.
-    /// </summary>
-    public void Consume()
-    {
+        // Prepare the first element.
         _source.Consume();
     }
 
     /// <summary>
-    /// Commit the current element sequence.
+    /// The current element to process.
     /// </summary>
-    /// <returns></returns>
-    internal TElement[] Commit() => _source.Commit();
+    public TElement Current => _source.Current;
 
     /// <summary>
-    /// Rollback to the nearest milestone.
+    /// If true, the current element is valid and accessible, otherwise false.
     /// </summary>
-    internal void Rollback()
+    public bool Empty => !_source.Valid;
+
+    public int ConsumedCount => _source.ConsumedCount;
+
+    public int BufferedCount => _source.BufferedCount;
+
+    /// <summary>
+    /// Count of consumed elements.
+    /// </summary>
+    private int _consumption;
+
+    /// <summary>
+    /// Stack of consumptions in every checkpoint.
+    /// </summary>
+    private readonly Stack<int> _checkpoints = new();
+
+    /// <summary>
+    /// Add a checkpoint at the current position.
+    /// </summary>
+    public void AddCheckpoint()
     {
-        if (_milestones.TryPop(out var consumption))
-            _source.Rollback(consumption);
+        _checkpoints.Push(_consumption);
+        _consumption = 0;
     }
 
     /// <summary>
-    /// Additional data of this context.
+    /// Remove the nearest checkpoint.
     /// </summary>
-    private readonly Dictionary<string, object> _data = new();
+    public void RemoveCheckpoint()
+    {
+        if (_checkpoints.TryPop(out var consumption))
+            _consumption += consumption;
+    }
 
     /// <summary>
-    /// Additional data indexer.
+    /// Consume the current element and get the next one.
     /// </summary>
-    /// <param name="name">Data item name.</param>
-    public object? this[string name]
+    /// <returns></returns>
+    public bool Consume()
     {
-        get => _data.TryGetValue(name, out var data) ? data : null;
-        set
-        {
-            if (value != null)
-                _data[name] = value;
-            else _data.Remove(name);
-        }
+        if (!_source.Consume())
+            return false;
+        _consumption++;
+        return true;
+    }
+
+    /// <summary>
+    /// Commit all consumed elements, ignore and clear all checkpoints.
+    /// </summary>
+    /// <returns>Consumed elements.</returns>
+    public TElement[] Commit()
+    {
+        _consumption = 0;
+        _checkpoints.Clear();
+        return _source.Commit();
+    }
+
+    /// <summary>
+    /// Rollback to the nearest checkpoint.
+    /// </summary>
+    public void Rollback()
+    {
+        _source.Rollback(_consumption);
+        _consumption = _checkpoints.TryPop(out var consumption) ? consumption : 0;
     }
 }

@@ -3,7 +3,6 @@
 public class EnumerableSource<TElement> : Source<TElement>
 {
     private readonly IEnumerable<TElement> _container;
-
     private IEnumerator<TElement> _enumerator;
 
     public EnumerableSource(IEnumerable<TElement> container)
@@ -12,17 +11,16 @@ public class EnumerableSource<TElement> : Source<TElement>
         _enumerator = _container.GetEnumerator();
     }
 
-    protected override bool Acquire(out TElement? element)
+    public void Reset()
     {
-        if (_enumerator.MoveNext())
-        {
-            element = _enumerator.Current;
-            return true;
-        }
-        
-        element = default;
-        return false;
+        _enumerator = _container.GetEnumerator();
     }
 
-    public void Reset() => _enumerator = _container.GetEnumerator();
+    protected override bool Acquire(ref TElement? element)
+    {
+        if (!_enumerator.MoveNext())
+            return false;
+        element = _enumerator.Current;
+        return true;
+    }
 }
